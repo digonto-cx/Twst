@@ -1,0 +1,126 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 1. Global Default-Deny Catch-All
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        (request.auth.token.email == 'hello.digontosaheb@gmail.com' && request.auth.token.email_verified == true) ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-\\.]+$');
+    }
+
+    // Visitor schema validation
+    function isValidVisitor(data) {
+      return data.keys().hasAll(['ip', 'fingerprint', 'createdAt']) &&
+             data.keys().hasOnly([
+               'ip', 'fingerprint', 'country', 'city', 'region', 'isp',
+               'deviceType', 'deviceName', 'os', 'browser', 'screenResolution',
+               'userAgent', 'hasSubmittedMessage', 'visitCount', 'createdAt', 'lastVisitedAt'
+             ]) &&
+             data.ip is string && data.ip.size() <= 64 &&
+             data.fingerprint is string && data.fingerprint.size() <= 128 &&
+             data.createdAt is string && data.createdAt.size() <= 64 &&
+             (!('country' in data) || (data.country is string && data.country.size() <= 100)) &&
+             (!('city' in data) || (data.city is string && data.city.size() <= 100)) &&
+             (!('region' in data) || (data.region is string && data.region.size() <= 100)) &&
+             (!('isp' in data) || (data.isp is string && data.isp.size() <= 150)) &&
+             (!('deviceType' in data) || (data.deviceType is string && data.deviceType.size() <= 50)) &&
+             (!('deviceName' in data) || (data.deviceName is string && data.deviceName.size() <= 100)) &&
+             (!('os' in data) || (data.os is string && data.os.size() <= 100)) &&
+             (!('browser' in data) || (data.browser is string && data.browser.size() <= 100)) &&
+             (!('screenResolution' in data) || (data.screenResolution is string && data.screenResolution.size() <= 50)) &&
+             (!('userAgent' in data) || (data.userAgent is string && data.userAgent.size() <= 512)) &&
+             (!('hasSubmittedMessage' in data) || data.hasSubmittedMessage is bool) &&
+             (!('visitCount' in data) || data.visitCount is number) &&
+             (!('lastVisitedAt' in data) || (data.lastVisitedAt is string && data.lastVisitedAt.size() <= 64));
+    }
+
+    // Message schema validation
+    function isValidMessage(data) {
+      return data.keys().hasAll(['name', 'email', 'message', 'ip', 'fingerprint', 'createdAt']) &&
+             data.keys().hasOnly([
+               'name', 'email', 'telegram', 'message', 'ip', 'fingerprint', 'location',
+               'deviceSummary', 'status', 'createdAt'
+             ]) &&
+             data.name is string && data.name.size() > 0 && data.name.size() <= 120 &&
+             data.email is string && data.email.size() > 3 && data.email.size() <= 150 &&
+             (!('telegram' in data) || (data.telegram is string && data.telegram.size() <= 100)) &&
+             data.message is string && data.message.size() > 0 && data.message.size() <= 2000 &&
+             data.ip is string && data.ip.size() <= 64 &&
+             data.fingerprint is string && data.fingerprint.size() <= 128 &&
+             data.createdAt is string && data.createdAt.size() <= 64 &&
+             (!('location' in data) || (data.location is string && data.location.size() <= 150)) &&
+             (!('deviceSummary' in data) || (data.deviceSummary is string && data.deviceSummary.size() <= 200)) &&
+             (!('status' in data) || (data.status in ['unread', 'read', 'archived']));
+    }
+
+    // Submission lock schema validation
+    function isValidLock(data) {
+      return data.keys().hasAll(['identifier', 'messageId', 'ip', 'createdAt']) &&
+             data.keys().hasOnly(['identifier', 'messageId', 'ip', 'createdAt']) &&
+             data.identifier is string && data.identifier.size() <= 128 &&
+             data.messageId is string && data.messageId.size() <= 128 &&
+             data.ip is string && data.ip.size() <= 64 &&
+             data.createdAt is string && data.createdAt.size() <= 64;
+    }
+
+    // Rules for Visitors telemetry collection
+    match /visitors/{visitorId} {
+      allow get: if isAdmin() || (resource != null && isValidId(visitorId));
+      allow list: if isAdmin();
+      allow create: if isValidId(visitorId) && isValidVisitor(incoming());
+      allow update: if isValidId(visitorId) && isValidVisitor(incoming()) && (
+        isAdmin() || (
+          // Visitor can only increment visit count and update lastVisitedAt/hasSubmittedMessage
+          incoming().diff(existing()).affectedKeys().hasOnly(['visitCount', 'lastVisitedAt', 'hasSubmittedMessage'])
+        )
+      );
+      allow delete: if isAdmin();
+    }
+
+    // Rules for Contact Messages
+    match /messages/{messageId} {
+      allow get: if isAdmin();
+      allow list: if isAdmin();
+      allow create: if isValidId(messageId) && isValidMessage(incoming());
+      allow update: if isAdmin() && isValidMessage(incoming());
+      allow delete: if isAdmin();
+    }
+
+    // Rules for Submission Locks
+    match /locks/{lockId} {
+      allow get: if isValidId(lockId);
+      allow list: if isAdmin();
+      allow create: if isValidId(lockId) && isValidLock(incoming());
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Admin collection
+    match /admins/{adminId} {
+      allow read, write: if isAdmin();
+    }
+  }
+}

@@ -1,0 +1,193 @@
+{
+  "entities": {
+    "Visitor": {
+      "title": "Visitor",
+      "description": "Visitor telemetry including IP, location, device and browser information",
+      "type": "object",
+      "properties": {
+        "ip": {
+          "type": "string",
+          "description": "Public IP address of the visitor",
+          "maxLength": 64
+        },
+        "fingerprint": {
+          "type": "string",
+          "description": "Hardware and client fingerprint hash",
+          "maxLength": 128
+        },
+        "country": {
+          "type": "string",
+          "description": "Country of origin",
+          "maxLength": 100
+        },
+        "city": {
+          "type": "string",
+          "description": "City of origin",
+          "maxLength": 100
+        },
+        "region": {
+          "type": "string",
+          "description": "State or region",
+          "maxLength": 100
+        },
+        "isp": {
+          "type": "string",
+          "description": "Internet Service Provider or network ASN",
+          "maxLength": 150
+        },
+        "deviceType": {
+          "type": "string",
+          "description": "Device classification (Desktop, Mobile, Tablet)",
+          "maxLength": 50
+        },
+        "deviceName": {
+          "type": "string",
+          "description": "Detected device model or brand",
+          "maxLength": 100
+        },
+        "os": {
+          "type": "string",
+          "description": "Operating system and version",
+          "maxLength": 100
+        },
+        "browser": {
+          "type": "string",
+          "description": "Browser name and version",
+          "maxLength": 100
+        },
+        "screenResolution": {
+          "type": "string",
+          "description": "Screen dimensions and pixel ratio",
+          "maxLength": 50
+        },
+        "userAgent": {
+          "type": "string",
+          "description": "Browser user agent string",
+          "maxLength": 512
+        },
+        "hasSubmittedMessage": {
+          "type": "boolean",
+          "description": "Flag whether visitor submitted a message"
+        },
+        "visitCount": {
+          "type": "number",
+          "description": "Number of recorded visits"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation timestamp in ISO format"
+        },
+        "lastVisitedAt": {
+          "type": "string",
+          "description": "Last activity timestamp in ISO format"
+        }
+      },
+      "required": ["ip", "fingerprint", "createdAt"]
+    },
+    "ContactMessage": {
+      "title": "ContactMessage",
+      "description": "One-time contact message submitted by visitor with audit trail",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Sender name in Bengali or English",
+          "maxLength": 120
+        },
+        "email": {
+          "type": "string",
+          "description": "Sender email address",
+          "maxLength": 150
+        },
+        "telegram": {
+          "type": "string",
+          "description": "Sender Telegram username or handle",
+          "maxLength": 100
+        },
+        "message": {
+          "type": "string",
+          "description": "Message content",
+          "maxLength": 2000
+        },
+        "ip": {
+          "type": "string",
+          "description": "Client IP address during submission",
+          "maxLength": 64
+        },
+        "fingerprint": {
+          "type": "string",
+          "description": "Client fingerprint hash",
+          "maxLength": 128
+        },
+        "location": {
+          "type": "string",
+          "description": "City and country string",
+          "maxLength": 150
+        },
+        "deviceSummary": {
+          "type": "string",
+          "description": "Device and browser summary",
+          "maxLength": 200
+        },
+        "status": {
+          "type": "string",
+          "description": "Read status of message",
+          "enum": ["unread", "read", "archived"],
+          "maxLength": 20
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "ISO timestamp of submission"
+        }
+      },
+      "required": ["name", "email", "message", "ip", "fingerprint", "createdAt"]
+    },
+    "SubmissionLock": {
+      "title": "SubmissionLock",
+      "description": "Guarantees strict single-submission enforcement per IP or fingerprint",
+      "type": "object",
+      "properties": {
+        "identifier": {
+          "type": "string",
+          "description": "Normalized IP or fingerprint key",
+          "maxLength": 128
+        },
+        "messageId": {
+          "type": "string",
+          "description": "Referenced message ID",
+          "maxLength": 128
+        },
+        "ip": {
+          "type": "string",
+          "description": "Origin IP address",
+          "maxLength": 64
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Lock creation timestamp"
+        }
+      },
+      "required": ["identifier", "messageId", "ip", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/visitors/{visitorId}": {
+      "schema": {
+        "$ref": "Visitor"
+      },
+      "description": "Logs device, location, and browser telemetry of site visitors"
+    },
+    "/messages/{messageId}": {
+      "schema": {
+        "$ref": "ContactMessage"
+      },
+      "description": "One-time contact inquiries submitted by visitors"
+    },
+    "/locks/{lockId}": {
+      "schema": {
+        "$ref": "SubmissionLock"
+      },
+      "description": "Locks to prevent repeated submissions across reloads, data clears, or browser changes"
+    }
+  }
+}
